@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRM Colombia</title>
+<style>
+/* Layout: la cifra de hoy manda; debajo, cifras del año, tendencia y datos completos. */
+:root {
+  color-scheme: light;
+  --page: #f6f7f6;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6d68;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --line: rgba(11, 11, 11, .12);
+  --series: #2a78d6;
+  --danger: #b42b2b;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0f1010;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #a3a198;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --line: rgba(255, 255, 255, .12);
+    --series: #3987e5;
+    --danger: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.5 var(--font);
+}
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+  display: grid;
+  gap: 24px;
+}
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.top h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.sync { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--axis); background: var(--grid); }
+button:disabled { cursor: progress; opacity: .6; }
+:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
+
+#content { display: grid; gap: 24px; transition: opacity .15s; }
+#content.loading { opacity: .55; }
+
+.error {
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.hero { display: grid; gap: 4px; }
+.hero .when { color: var(--ink-2); }
+.hero .value {
+  font-size: clamp(48px, 11vw, 84px);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+}
+.hero .unit { font-size: 15px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); margin-left: 6px; white-space: nowrap; }
+.hero .delta { font-size: 16px; }
+.hero .delta strong { font-weight: 600; }
+.hero .delta span { color: var(--ink-2); }
+.hero .next { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
+.hero .next strong { color: var(--ink); font-weight: 600; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-block: 1px solid var(--line);
+}
+.stat { padding: 12px 16px; border-left: 1px solid var(--line); min-width: 0; }
+.stat:first-child { border-left: 0; padding-left: 0; }
+.stat dt { font-size: 13px; color: var(--ink-2); }
+.stat dd { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3; }
+.stat small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+@media (max-width: 640px) {
+  .stats { grid-template-columns: 1fr 1fr; }
+  .stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+.chart-card h2, details summary { font-size: 15px; font-weight: 600; margin: 0; }
+.chart-card p { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; }
+#chart { position: relative; touch-action: pan-y; min-height: 260px; }
+#chart svg { display: block; width: 100%; }
+#chart svg:focus-visible { outline-offset: 4px; }
+#chart text { font: 12px var(--font); fill: var(--muted); font-variant-numeric: tabular-nums; }
+#chart .extreme { fill: var(--ink); font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+#tip {
+  position: absolute;
+  top: 8px;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+#tip b { display: block; font-size: 15px; font-weight: 600; }
+#tip span { color: var(--ink-2); display: block; }
+
+details {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+summary { cursor: pointer; }
+.table-scroll { max-height: 420px; overflow: auto; margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th { position: sticky; top: 0; background: var(--surface); font-weight: 600; color: var(--ink-2); }
+
+footer { color: var(--muted); font-size: 13px; }
+footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>TRM Colombia · pesos por dólar</h1>
+    <div class="sync">
+      <span id="status" role="status">Consultando datos.gov.co…</span>
+      <button id="refresh" type="button">Actualizar</button>
+    </div>
+  </header>
+
+  <div id="error" class="error" role="alert" hidden></div>
+
+  <main id="content" class="loading">
+    <section class="hero" aria-label="Valor de la TRM">
+      <div class="when" id="when">Cargando la TRM vigente…</div>
+      <div class="value"><span id="value">—</span><span class="unit">COP por 1 USD</span></div>
+      <div class="delta" id="delta"></div>
+      <div class="next" id="next" hidden></div>
+    </section>
+
+    <dl class="stats" aria-label="Resumen del último año">
+      <div class="stat"><dt>Máximo del año</dt><dd id="s-max">—</dd></div>
+      <div class="stat"><dt>Mínimo del año</dt><dd id="s-min">—</dd></div>
+      <div class="stat"><dt>Promedio diario</dt><dd id="s-avg">—</dd></div>
+      <div class="stat"><dt>Cambio en 12 meses</dt><dd id="s-chg">—</dd></div>
+    </dl>
+
+    <section class="chart-card">
+      <h2>Tendencia del último año</h2>
+      <p id="range">&nbsp;</p>
+      <div id="chart"><div id="tip" hidden></div></div>
+    </section>
+
+    <details>
+      <summary>Ver todos los valores del año</summary>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">Vigencia</th><th scope="col">TRM (COP)</th><th scope="col">Cambio</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </details>
+  </main>
+
+  <footer>
+    Fuente: <a href="https://www.datos.gov.co/d/32sa-8pi3" target="_blank" rel="noopener">datos.gov.co, conjunto 32sa-8pi3</a>.
+    Sábados, domingos y festivos comparten un mismo valor, por eso algunas filas cubren varios días.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const API = 'https://www.datos.gov.co/resource/32sa-8pi3.json';
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const DAY = 86400000;
+  const $ = id => document.getElementById(id);
+
+  const moneyFmt = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money = n => '$' + moneyFmt.format(n);
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + money(Math.abs(n));
+  const percent = n => (n > 0 ? '+' : n < 0 ? '−' : '') + moneyFmt.format(Math.abs(n)) + ' %';
+  const arrow = n => (n > 0 ? '▲' : n < 0 ? '▼' : '=');
+
+  // Las fechas se manejan como 'YYYY-MM-DD' y en UTC para que la zona horaria del navegador no las corra.
+  const toTime = s => Date.parse(s + 'T00:00:00Z');
+  const dateFmt = opts => new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', ...opts });
+  const fmtLong = dateFmt({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtDay = dateFmt({ day: 'numeric', month: 'short', year: 'numeric' });
+  const fmtShort = dateFmt({ day: 'numeric', month: 'short' });
+  const fmtMonth = dateFmt({ month: 'short' });
+  const clean = s => s.replace(/\./g, '');
+  const dayLabel = s => clean(fmtDay.format(toTime(s)));
+  const shortLabel = s => clean(fmtShort.format(toTime(s)));
+  const rangeLabel = r => r.desde === r.hasta ? dayLabel(r.desde) : `${shortLabel(r.desde)} – ${dayLabel(r.hasta)}`;
+
+  const bogotaToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+  const oneYearBefore = s => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(Date.UTC(y - 1, m - 1, d)).toISOString().slice(0, 10);
+  };
+
+  async function fetchRows(start) {
+    const params = new URLSearchParams({
+      $select: 'valor,vigenciadesde,vigenciahasta',
+      $where: `vigenciahasta >= '${start}T00:00:00'`,
+      $order: 'vigenciadesde ASC',
+      $limit: '1000',
+    });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const res = await fetch(`${API}?${params}`, { signal: ctrl.signal });
+      if (!res.ok) throw new Error(`datos.gov.co respondió con el código ${res.status}`);
+      const data = await res.json();
+      const byDate = new Map();
+      for (const d of data) {
+        const valor = Number(d.valor);
+        const desde = String(d.vigenciadesde).slice(0, 10);
+        if (!(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(desde)) continue;
+        const hasta = String(d.vigenciahasta || d.vigenciadesde).slice(0, 10);
+        byDate.set(desde, { desde, hasta, valor, t: toTime(desde) });
+      }
+      return [...byDate.values()].sort((a, b) => a.t - b.t);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function summarize(rows, today) {
+    const series = rows.filter(r => r.desde <= today);
+    if (!series.length) throw new Error('La API no devolvió valores para el último año');
+    const current = series[series.length - 1];
+    const first = series[0];
+    const previous = series[series.length - 2] || null;
+    const next = rows.find(r => r.desde > today) || null;
+    // El promedio pondera cada valor por los días que estuvo vigente (un fin de semana cuenta 3 días).
+    let days = 0, sum = 0;
+    series.forEach((r, i) => {
+      const end = i < series.length - 1 ? series[i + 1].t : toTime(today) + DAY;
+      const n = Math.max(1, Math.round((end - r.t) / DAY));
+      days += n;
+      sum += r.valor * n;
+    });
+    const pick = better => series.reduce((a, b) => better(b.valor, a.valor) ? b : a);
+    return {
+      series, current, previous, next, first,
+      isToday: current.hasta >= today,
+      max: pick((x, y) => x >= y),
+      min: pick((x, y) => x <= y),
+      avg: sum / days,
+    };
+  }
+
+  function setStat(id, main, sub) {
+    const el = $(id);
+    el.textContent = main;
+    const small = document.createElement('small');
+    small.textContent = sub;
+    el.append(small);
+  }
+
+  function renderSummary(s, today) {
+    $('when').textContent = s.isToday
+      ? `TRM vigente hoy, ${fmtLong.format(toTime(today))}`
+      : `Último valor publicado, vigente hasta el ${dayLabel(s.current.hasta)}`;
+    $('value').textContent = money(s.current.valor);
+
+    const delta = $('delta');
+    delta.textContent = '';
+    if (s.previous) {
+      const diff = s.current.valor - s.previous.valor;
+      const strong = document.createElement('strong');
+      strong.textContent = `${arrow(diff)} ${signed(diff)} (${percent(diff / s.previous.valor * 100)})`;
+      const rest = document.createElement('span');
+      rest.textContent = ` frente a la TRM anterior (${rangeLabel(s.previous)})`;
+      delta.append(strong, rest);
+    }
+
+    const next = $('next');
+    next.hidden = !s.next;
+    if (s.next) {
+      next.textContent = `Ya publicada para el ${dayLabel(s.next.desde)}: `;
+      const strong = document.createElement('strong');
+      strong.textContent = money(s.next.valor);
+      next.append(strong);
+    }
+
+    setStat('s-max', money(s.max.valor), rangeLabel(s.max));
+    setStat('s-min', money(s.min.valor), rangeLabel(s.min));
+    setStat('s-avg', money(s.avg), `${s.series.length} valores publicados`);
+    const yearDiff = s.current.valor - s.first.valor;
+    setStat('s-chg', `${arrow(yearDiff)} ${percent(yearDiff / s.first.valor * 100)}`,
+      `${signed(yearDiff)} desde ${dayLabel(s.first.desde)}`);
+
+    $('range').textContent = `Del ${dayLabel(s.first.desde)} al ${dayLabel(s.current.desde)}. La escala no empieza en cero para mostrar mejor las variaciones.`;
+  }
+
+  function renderTable(series) {
+    const frag = document.createDocumentFragment();
+    for (let i = series.length - 1; i >= 0; i--) {
+      const r = series[i], tr = document.createElement('tr');
+      const diff = i > 0 ? r.valor - series[i - 1].valor : null;
+      for (const text of [rangeLabel(r), money(r.valor), diff === null ? '—' : signed(diff)]) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.append(td);
+      }
+      frag.append(tr);
+    }
+    $('rows').replaceChildren(frag);
+  }
+
+  function svgEl(name, attrs, text) {
+    const el = document.createElementNS(SVG_NS, name);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function niceStep(span, target) {
+    const raw = span / target;
+    const mag = 10 ** Math.floor(Math.log10(raw));
+    const norm = raw / mag;
+    return (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  }
+
+  function renderChart(s) {
+    const box = $('chart'), tip = $('tip');
+    box.querySelector('svg')?.remove();
+    tip.hidden = true;
+
+    const W = Math.max(280, box.clientWidth);
+    const H = Math.round(Math.min(420, Math.max(260, W * 0.42)));
+    const m = { top: 12, right: 14, bottom: 26, left: 58 };
+    const pts = s.series;
+
+    const pad = (s.max.valor - s.min.valor) * 0.1 || 10;
+    const step = niceStep(s.max.valor - s.min.valor + 2 * pad, 5);
+    const lo = Math.floor((s.min.valor - pad) / step) * step;
+    const hi = Math.ceil((s.max.valor + pad) / step) * step;
+
+    const t0 = pts[0].t, t1 = Math.max(pts[pts.length - 1].t, t0 + DAY);
+    const x = t => m.left + (t - t0) / (t1 - t0) * (W - m.left - m.right);
+    const y = v => m.top + (hi - v) / (hi - lo) * (H - m.top - m.bottom);
+
+    const svg = svgEl('svg', {
+      viewBox: `0 0 ${W} ${H}`, height: H, tabindex: 0, role: 'img',
+      'aria-label': `Línea de la TRM en el último año. Máximo ${money(s.max.valor)}, mínimo ${money(s.min.valor)}, actual ${money(s.current.valor)}. Use las flechas izquierda y derecha para recorrer los valores.`,
+    });
+
+    for (let v = lo; v <= hi + step / 2; v += step) {
+      svg.append(svgEl('line', { x1: m.left, x2: W - m.right, y1: y(v), y2: y(v), stroke: 'var(--grid)' }));
+      svg.append(svgEl('text', { x: m.left - 8, y: y(v) + 4, 'text-anchor': 'end' }, '$' + Math.round(v).toLocaleString('es-CO')));
+    }
+
+    // Una marca por mes; en pantallas angostas, una cada dos o tres meses.
+    const ticks = [];
+    const d0 = new Date(t0);
+    for (let d = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1); d <= t1;
+         d = Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth() + 1, 1)) ticks.push(d);
+    const every = W < 420 ? 3 : W < 700 ? 2 : 1;
+    ticks.forEach((t, i) => {
+      if (i % every) return;
+      const date = new Date(t);
+      const label = clean(fmtMonth.format(t)) + (date.getUTCMonth() === 0 ? ` ${date.getUTCFullYear()}` : '');
+      svg.append(svgEl('line', { x1: x(t), x2: x(t), y1: H - m.bottom, y2: H - m.bottom + 4, stroke: 'var(--axis)' }));
+      svg.append(svgEl('text', { x: x(t), y: H - 6, 'text-anchor': 'middle' }, label));
+    });
+    svg.append(svgEl('line', { x1: m.left, x2: W - m.right, y1: H - m.bottom, y2: H - m.bottom, stroke: 'var(--axis)' }));
+
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)} ${y(p.valor).toFixed(1)}`).join('');
+    svg.append(svgEl('path', { d, fill: 'none', stroke: 'var(--series)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+
+    const addExtreme = (p, above, name) => {
+      const px = x(p.t), py = y(p.valor);
+      const anchor = px < m.left + 60 ? 'start' : px > W - m.right - 60 ? 'end' : 'middle';
+      svg.append(svgEl('circle', { cx: px, cy: py, r: 3.5, fill: 'var(--series)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+      svg.append(svgEl('text', { class: 'extreme', x: px, y: py + (above ? -9 : 18), 'text-anchor': anchor }, `${name} ${money(p.valor)}`));
+    };
+    addExtreme(s.max, true, 'Máx.');
+    addExtreme(s.min, false, 'Mín.');
+
+    const end = pts[pts.length - 1];
+    svg.append(svgEl('circle', { cx: x(end.t), cy: y(end.valor), r: 5, fill: 'var(--series)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+
+    const cross = svgEl('line', { y1: m.top, y2: H - m.bottom, stroke: 'var(--muted)', visibility: 'hidden' });
+    const dot = svgEl('circle', { r: 5, fill: 'var(--series)', stroke: 'var(--surface)', 'stroke-width': 2, visibility: 'hidden' });
+    svg.append(cross, dot);
+    box.append(svg);
+
+    let active = pts.length - 1;
+    const show = i => {
+      active = Math.max(0, Math.min(pts.length - 1, i));
+      const p = pts[active], px = x(p.t), py = y(p.valor);
+      cross.setAttribute('x1', px); cross.setAttribute('x2', px);
+      dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+      cross.setAttribute('visibility', 'visible');
+      dot.setAttribute('visibility', 'visible');
+
+      const value = document.createElement('b');
+      value.textContent = money(p.valor);
+      const date = document.createElement('span');
+      date.textContent = rangeLabel(p);
+      tip.replaceChildren(value, date);
+      if (active > 0) {
+        const change = document.createElement('span');
+        change.textContent = `${signed(p.valor - pts[active - 1].valor)} frente al valor anterior`;
+        tip.append(change);
+      }
+      tip.hidden = false;
+      const scale = box.clientWidth / W;
+      const left = px * scale;
+      const tw = tip.offsetWidth;
+      tip.style.left = (left + 12 + tw < box.clientWidth ? left + 12 : Math.max(0, left - tw - 12)) + 'px';
+    };
+    const hide = () => {
+      tip.hidden = true;
+      cross.setAttribute('visibility', 'hidden');
+      dot.setAttribute('visibility', 'hidden');
+    };
+    const nearest = t => {
+      let a = 0, b = pts.length - 1;
+      while (b - a > 1) {
+        const c = (a + b) >> 1;
+        if (pts[c].t <= t) a = c; else b = c;
+      }
+      return t - pts[a].t <= pts[b].t - t ? a : b;
+    };
+
+    svg.addEventListener('pointermove', e => {
+      const rect = svg.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width * W;
+      show(nearest(t0 + (px - m.left) / (W - m.left - m.right) * (t1 - t0)));
+    });
+    svg.addEventListener('pointerleave', hide);
+    svg.addEventListener('focus', () => { if (svg.matches(':focus-visible')) show(active); });
+    svg.addEventListener('blur', hide);
+    svg.addEventListener('keydown', e => {
+      const moves = { ArrowLeft: active - 1, ArrowRight: active + 1, Home: 0, End: pts.length - 1 };
+      if (e.key in moves) { e.preventDefault(); show(moves[e.key]); }
+      else if (e.key === 'Escape') hide();
+    });
+  }
+
+  let summary = null;
+  let loading = false;
+
+  async function load() {
+    if (loading) return;
+    loading = true;
+    $('content').classList.add('loading');
+    $('refresh').disabled = true;
+    $('status').textContent = 'Consultando datos.gov.co…';
+    $('error').hidden = true;
+    try {
+      const today = bogotaToday();
+      const rows = await fetchRows(oneYearBefore(today));
+      summary = summarize(rows, today);
+      renderSummary(summary, today);
+      renderChart(summary);
+      renderTable(summary.series);
+      $('status').textContent = 'Consultado a las ' + new Date().toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+    } catch (err) {
+      const reason = err.name === 'AbortError' ? 'datos.gov.co tardó demasiado en responder' : err.message;
+      $('error').textContent = `No se pudo cargar la TRM: ${reason}. Revise su conexión y pulse Actualizar.`
+        + (summary ? ' Los datos en pantalla son de la consulta anterior.' : '');
+      $('error').hidden = false;
+      $('status').textContent = 'Sin actualizar';
+    } finally {
+      loading = false;
+      $('content').classList.remove('loading');
+      $('refresh').disabled = false;
+    }
+  }
+
+  $('refresh').addEventListener('click', load);
+  let lastWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w !== lastWidth) {
+      lastWidth = w;
+      if (summary) renderChart(summary);
+    }
+  }).observe($('chart'));
+  load();
+})();
+</script>
+</body>
+</html>
